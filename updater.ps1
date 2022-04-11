@@ -1,12 +1,5 @@
 $proxy = "http://127.0.0.1:1080"
 
-function Download-Personal-Updater {
-    $link = "https://raw.githubusercontent.com/Elio-zhy/mpv_updater/master/updater.ps1"
-    $filename = (Get-Location).Path + "\installer\updater.ps1"
-    Write-Host "Downloading updater.ps1" -ForegroundColor Green
-    Invoke-WebRequest -Proxy $proxy -Uri $link -UserAgent [Microsoft.PowerShell.Commands.PSUserAgent]::FireFox -OutFile $filename
-}
-
 function Check-7z {
     $7zdir = (Get-Location).Path + "\7z"
     if (-not (Test-Path ($7zdir + "\7za.exe")) -and -not (Test-Path (Get-Command "7z.exe").Path))
@@ -127,6 +120,7 @@ function Test-Admin
 function Create-XML {
 @"
 <settings>
+  <autorestart>unset</autorestart>
   <autodelete>unset</autodelete>
 </settings>
 "@ | Set-Content "settings.xml" -Encoding UTF8
@@ -136,8 +130,9 @@ function Check-Autodelete($archive) {
     $autodelete = ""
     $file = "settings.xml"
 
-    if (-not (Test-Path $file)) { exit }
+    if (-not (Test-Path $file)) { Create-XML }
     [xml]$doc = Get-Content $file
+
     if ($doc.settings.autodelete -eq "unset") {
         $result = Read-KeyOrTimeout "Delete clash archives after extract? [Y/n] (default=Y)" "Y"
         Write-Host ""
@@ -150,10 +145,44 @@ function Check-Autodelete($archive) {
         $doc.settings.autodelete = $autodelete
         $doc.Save($file)
     }
+
     if ($doc.settings.autodelete -eq "true") {
         if (Test-Path $archive)
         {
             Remove-Item -Force $archive
+        }
+    }
+}
+
+function Shutdown-Clash {
+    $name = "Clash for Windows"
+    Stop-Process -Name $name
+}
+
+function Check-Autorestart {
+    $autorestart = ""
+    $file = "settings.xml"
+    $filepath = (Get-Location).Path + "\Clash for Windows.exe"
+
+    if (-not (Test-Path $file)) { Create-XML }
+    [xml]$doc = Get-Content $file
+
+    if ($doc.settings.autorestart -eq "unset") {
+        $result = Read-KeyOrTimeout "Restart clash process after extract? [Y/n] (default=Y)" "Y"
+        Write-Host ""
+        if ($result -eq 'Y') {
+            $autorestart = "true"
+        }
+        elseif ($result -eq 'N') {
+            $autorestart = "false"
+        }
+        $doc.settings.autorestart = $autorestart
+        $doc.Save($file)
+    }
+
+    if ($doc.settings.autorestart -eq "true") {
+        if (Test-Path $filepath) {
+            $command = Start-Job -ScriptBlock { Start-Process -FilePath $args[0] } -ArgumentList $filepath
         }
     }
 }
@@ -204,8 +233,9 @@ function Upgrade-Clash {
     if ($need_download) {
         Download-Clash $remoteName $download_link
         Check-7z
+        Shutdown-Clash
         Extract-Clash $remoteName
-        Download-Personal-updater
+        Check-Autorestart
     }
     Check-Autodelete $remoteName
 }
