@@ -122,20 +122,11 @@ function Get-Latest-Clash($remoteName, $downloadLink) {
 
 function Get-7zPath {
     $result = ""
-    $err = $false
 
-    if ($args.Length -le 0) {
-        $err = $true
-    }
-    else {
-        $result = $args[0]
-        if (-not (Test-Path $args)) {
-            $err = $true
-        }
-    }
+    $result = [System.Environment]::ExpandEnvironmentVariables("%Programs%\7-zip\7z.exe")
 
-    if ($err) {
-        Write-Host "Provide correct 7z.exe path." -ForegroundColor Red
+    if (-not (Test-Path $result)) {
+        Write-Host "7z not installed. Please install manually" -ForegroundColor Red
         throw
     }
 
@@ -249,7 +240,7 @@ function Update-Clash {
 
     if ($needDownload) {
         Get-Latest-Clash $remoteName $downloadLink
-        $7zPath = Confirm-7z
+        $7zPath = Get-7zPath
         Stop-Clash
         Start-Extraction $remoteName $7zPath
         Write-Host "Update done. Restart clash manually." -ForegroundColor Green
